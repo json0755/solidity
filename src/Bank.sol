@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
-/**
- * @title Bank
- * @dev 一个简洁优雅的银行合约，支持存款、管理员提取和排行榜功能
- */
-contract Bank {
+import "./interfaces/IBank.sol";
+
+contract Bank is IBank {
     // 管理员地址
-    address public owner;
+    address public _owner;
     
     // 重入锁
     bool private locked;
@@ -16,14 +14,9 @@ contract Bank {
     address[3] public topDepositors;
     uint256 public totalDeposits;
     
-    // 事件
-    event Deposit(address indexed depositor, uint256 amount, uint256 newBalance);
-    event Withdraw(address indexed admin, uint256 amount);
-    event TopDepositorsUpdated(address[3] newTopDepositors);
-    
     // 修饰符
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner can call this function");
+    modifier onlyBankOwner() virtual {
+        require(msg.sender == owner(), "Only owner can call this function");
         _;
     }
     
@@ -35,20 +28,27 @@ contract Bank {
     }
     
     constructor() {
-        owner = msg.sender;
+        _owner = msg.sender;
+    }
+    
+    /**
+     * @dev 获取管理员地址，可被子合约重写
+     */
+    function owner() public view virtual returns (address) {
+        return _owner;
     }
     
     /**
      * @dev 接收ETH存款
      */
-    receive() external payable {
+    receive() external payable virtual {
         _deposit();
     }
     
     /**
      * @dev 回退函数，也用于接收存款
      */
-    fallback() external payable {
+    fallback() external payable virtual {
         _deposit();
     }
     
@@ -130,20 +130,20 @@ contract Bank {
     }
     
     /**
-     * @dev 管理员提取资金
+     * @dev 提取资金（仅管理员）
      * @param amount 提取金额，0表示提取全部
      */
-    function withdraw(uint256 amount) external onlyOwner nonReentrant {
+    function withdraw(uint256 amount) external virtual onlyBankOwner nonReentrant {
         uint256 contractBalance = address(this).balance;
         require(contractBalance > 0, "No funds to withdraw");
         
         uint256 withdrawAmount = amount == 0 ? contractBalance : amount;
         require(withdrawAmount <= contractBalance, "Insufficient contract balance");
         
-        (bool success, ) = payable(owner).call{value: withdrawAmount}("");
+        (bool success, ) = payable(owner()).call{value: withdrawAmount}("");
         require(success, "Withdrawal failed");
         
-        emit Withdraw(owner, withdrawAmount);
+        emit Withdraw(owner(), withdrawAmount);
     }
     
     /**
@@ -151,7 +151,7 @@ contract Bank {
      * @param user 用户地址
      * @return 用户存款余额
      */
-    function getBalance(address user) external view returns (uint256) {
+    function getBalance(address user) external view virtual returns (uint256) {
         return balances[user];
     }
     
@@ -159,7 +159,7 @@ contract Bank {
      * @dev 获取合约总余额
      * @return 合约当前ETH余额
      */
-    function getContractBalance() external view returns (uint256) {
+    function getContractBalance() external view virtual returns (uint256) {
         return address(this).balance;
     }
     
